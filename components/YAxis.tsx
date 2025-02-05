@@ -1,8 +1,8 @@
-import { CANDLE_CHART_HEIGHT, margin, TOTAL_CHART_HEIGHT } from "@/const";
-import { YAxisProps } from "@/type";
 import React from "react";
-import Svg, { TSpan } from "react-native-svg";
+import { YAxisProps } from "@/type";
 import { Text } from "react-native-svg";
+import Svg, { TSpan } from "react-native-svg";
+import { CANDLE_CHART_HEIGHT, margin } from "@/const";
 
 export const YAxis: React.FC<YAxisProps> = React.memo(
   ({ yMin, yMax, volumeMax, candleYScale, volumeYScale }) => (

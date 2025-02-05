@@ -1,3 +1,10 @@
+import React, {
+  useRef,
+  useMemo,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 import {
   View,
   Text,
@@ -8,80 +15,165 @@ import {
   ListRenderItemInfo,
 } from "react-native";
 import CoinRow from "@/components/CoinRow";
-import { ICoinData, ITickerData } from "@/type";
+import { CoinData, TickerData } from "@/type";
 import { UpbitSocketManager } from "@/socket/upbit";
-import React, { useCallback, useEffect, useState } from "react";
-
-const initialCoinData: ICoinData[] = [];
 
 const TradingScreen: React.FC = () => {
-  const [coinList, setCoinList] = useState<ICoinData[]>(initialCoinData);
-  const [socketData, setSocketData] = useState<ITickerData | null>(null);
+  const subscriptionSent = useRef(false);
+  const [coinList, setCoinList] = useState<CoinData[]>([]);
+  const [coinData, setCoinData] = useState<CoinData[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [socketData, setSocketData] = useState<TickerData | null>(null);
 
   useEffect(() => {
-    const socketManager = UpbitSocketManager.getInstance();
-    socketManager.subscribeType("ticker");
+    const fetchMarketAndTickerData = async () => {
+      try {
+        // 1. 마켓 목록 호출
+        const marketResponse = await fetch(
+          "https://api.upbit.com/v1/market/all?is_details=true"
+        );
+        const marketData = await marketResponse.json();
 
-    const handleData = (data: any) => {
-      if (data && data.code) {
-        setSocketData(data as ITickerData);
+        const filteredData = marketData.filter((item: any) =>
+          item.market.startsWith("KRW-")
+        );
+
+        const marketListStr = filteredData
+          .map((item: any) => item.market)
+          .join(",");
+        const tickerResponse = await fetch(
+          `https://api.upbit.com/v1/ticker?markets=${marketListStr}`
+        );
+        let tickerData = await tickerResponse.json();
+        if (!Array.isArray(tickerData)) {
+          tickerData = [tickerData];
+        }
+
+        const coins: CoinData[] = filteredData.map((item: any) => {
+          const ticker = tickerData.find(
+            (t: TickerData) => t.market === item.market
+          );
+          return {
+            id: item.market,
+            nameKr: item.korean_name,
+            nameEn: item.english_name,
+            currentPrice:
+              ticker && ticker.trade_price !== undefined
+                ? ticker.trade_price.toString()
+                : "0",
+            diffRate:
+              ticker && ticker.signed_change_rate !== undefined
+                ? (ticker.signed_change_rate * 100).toFixed(2) + "%"
+                : "0%",
+            diffAmount:
+              ticker && ticker.signed_change_price !== undefined
+                ? ticker.signed_change_price.toString()
+                : "0",
+            volume:
+              ticker && ticker.acc_trade_price_24h !== undefined
+                ? ticker.acc_trade_price_24h.toString()
+                : "0",
+          };
+        });
+
+        coins.sort(
+          (a: CoinData, b: CoinData) => Number(b.volume) - Number(a.volume)
+        );
+
+        setCoinList(coins);
+        setCoinData(coins);
+      } catch (error) {
+        console.error("마켓/티커 데이터 로드 에러:", error);
       }
     };
-    socketManager.subscribe(handleData);
-    return () => {
-      socketManager.unsubscribe(handleData);
-    };
+
+    fetchMarketAndTickerData();
   }, []);
 
   useEffect(() => {
-    if (socketData?.code) {
-      const parts = socketData.code.split("-");
-      if (parts.length === 2) {
-        const targetTicker = `${parts[1]}/KRW`;
-        setCoinList((prevList) => {
-          const coinIndex = prevList.findIndex(
-            (coin) => coin.nameEn === targetTicker
-          );
-          const updatedCoin: ICoinData = {
-            id: socketData.code ?? "",
-            nameKr: socketData.code ?? "",
-            nameEn: targetTicker ?? "",
-            currentPrice:
-              socketData.trade_price !== undefined &&
-              socketData.trade_price !== null
-                ? socketData.trade_price.toString()
-                : "0",
-            diffRate:
-              socketData.signed_change_rate !== undefined &&
-              socketData.signed_change_rate !== null
-                ? (socketData.signed_change_rate * 100).toFixed(2) + "%"
-                : "0%",
-            diffAmount:
-              socketData.signed_change_price !== undefined &&
-              socketData.signed_change_price !== null
-                ? socketData.signed_change_price.toString()
-                : "0",
-            volume:
-              socketData.acc_trade_price_24h !== undefined &&
-              socketData.acc_trade_price_24h !== null
-                ? socketData.acc_trade_price_24h.toString()
-                : "0",
-          };
-          if (coinIndex !== -1) {
-            const newList = [...prevList];
-            newList[coinIndex] = updatedCoin;
-            return newList;
-          }
-          return [...prevList, updatedCoin];
-        });
+    const socketManager = new UpbitSocketManager();
+    const handleData = (data: any) => {
+      if (data && data.type == "ticker" && (data.market || data.code)) {
+        setSocketData(data as TickerData);
       }
+    };
+
+    if (!subscriptionSent.current && coinData.length > 0) {
+      socketManager.subscribe(handleData);
+      const marketList = coinData.map((item) => item.id);
+      socketManager.subscribeType("ticker", marketList);
+      subscriptionSent.current = true;
+    }
+    return () => {
+      socketManager.unsubscribe(handleData);
+      subscriptionSent.current = false;
+    };
+  }, [coinList]);
+
+  useEffect(() => {
+    if (socketData?.market || socketData?.code) {
+      const id = socketData.market ?? socketData.code;
+      setCoinData((prevList) => {
+        const coinIndex = prevList.findIndex((coin) => coin.id === id);
+        const updatedCoin: CoinData = {
+          id: id,
+          nameKr: coinIndex !== -1 ? prevList[coinIndex].nameKr : id,
+          nameEn: coinIndex !== -1 ? prevList[coinIndex].nameEn : id,
+          currentPrice:
+            socketData.trade_price !== undefined &&
+            socketData.trade_price !== null
+              ? socketData.trade_price.toString()
+              : "0",
+          diffRate:
+            socketData.signed_change_rate !== undefined &&
+            socketData.signed_change_rate !== null
+              ? (socketData.signed_change_rate * 100).toFixed(2) + "%"
+              : "0%",
+          diffAmount:
+            socketData.signed_change_price !== undefined &&
+            socketData.signed_change_price !== null
+              ? socketData.signed_change_price.toString()
+              : "0",
+          volume:
+            socketData.acc_trade_price_24h !== undefined &&
+            socketData.acc_trade_price_24h !== null
+              ? socketData.acc_trade_price_24h.toString()
+              : "0",
+        };
+
+        if (coinIndex !== -1) {
+          const currentCoin = prevList[coinIndex];
+          if (
+            currentCoin.currentPrice === updatedCoin.currentPrice &&
+            currentCoin.diffRate === updatedCoin.diffRate &&
+            currentCoin.diffAmount === updatedCoin.diffAmount &&
+            currentCoin.volume === updatedCoin.volume
+          ) {
+            return prevList;
+          }
+          const newList = [...prevList];
+          newList[coinIndex] = updatedCoin;
+          return newList;
+        }
+        return [...prevList, updatedCoin];
+      });
     }
   }, [socketData]);
 
-  const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<ICoinData>) => <CoinRow coin={item} />,
-    []
-  );
+  const filteredCoinList = useMemo(() => {
+    if (!searchQuery) return coinData;
+    const lowerQuery = searchQuery.toLowerCase();
+    return coinData.filter(
+      (coin) =>
+        coin.nameKr.toLowerCase().includes(lowerQuery) ||
+        coin.nameEn.toLowerCase().includes(lowerQuery) ||
+        coin.id.toLowerCase().includes(lowerQuery)
+    );
+  }, [coinData, searchQuery]);
+
+  const renderItem = useCallback(({ item }: ListRenderItemInfo<CoinData>) => {
+    return <CoinRow coin={item} />;
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -90,6 +182,8 @@ const TradingScreen: React.FC = () => {
           style={styles.searchInput}
           placeholder="코인명/심볼 검색"
           placeholderTextColor="#888"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
         />
       </View>
 
@@ -125,7 +219,7 @@ const TradingScreen: React.FC = () => {
       </View>
 
       <FlatList
-        data={coinList}
+        data={filteredCoinList}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.flatListContainer}
@@ -180,56 +274,6 @@ const styles = StyleSheet.create({
   },
   flatListContainer: {
     paddingBottom: 20,
-  },
-  coinRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomColor: "#333",
-    borderBottomWidth: 1,
-  },
-  coinInfo: {
-    width: "25%",
-  },
-  coinName: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  coinSymbol: {
-    color: "#888",
-    fontSize: 12,
-    marginTop: 2,
-  },
-  coinPriceContainer: {
-    width: "25%",
-    alignItems: "flex-end",
-  },
-  coinPrice: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  diffContainer: {
-    alignItems: "flex-end",
-    width: "25%",
-  },
-  diffRate: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  diffRateSmall: {
-    fontSize: 10,
-    marginTop: 2,
-  },
-  volumeContainer: {
-    flex: 1,
-    alignItems: "flex-end",
-  },
-  volumeText: {
-    color: "#fff",
-    fontSize: 11,
   },
 });
 

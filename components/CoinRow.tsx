@@ -1,49 +1,56 @@
-import { memo } from "react";
-import { ICoinData } from "@/type";
+import { CoinData } from "@/type";
 import { router } from "expo-router";
+import { memo, useCallback, useMemo } from "react";
 import { formatToMillion } from "@/function/function";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 
-const CoinRow = memo(({ coin }: { coin: ICoinData }) => {
+const CoinRow = memo(({ coin }: { coin: CoinData }) => {
   const isMinus = coin.diffRate.includes("-");
+  const diffTextColor = useMemo(
+    () => (isMinus ? "#4692F3" : "#FF5B5B"),
+    [isMinus]
+  );
+
+  const handlePress = useCallback(() => {
+    router.push({
+      pathname: "/DetailScreen",
+      params: {
+        data: JSON.stringify(coin),
+      },
+    });
+  }, [coin]);
+
   return (
-    <Pressable
-      style={styles.coinRow}
-      onPress={() => {
-        router.push({
-          pathname: "/DetailScreen",
-          params: {
-            data: coin.id,
-          },
-        });
-      }}
-    >
+    <Pressable style={styles.coinRow} onPress={handlePress}>
       <View style={styles.coinInfo}>
-        <Text style={styles.coinName}>{coin.nameKr}</Text>
-        <Text style={styles.coinSymbol}>{coin.nameEn}</Text>
+        <Text style={styles.coinName} numberOfLines={1}>
+          {coin.nameKr}
+        </Text>
+        <Text style={styles.coinSymbol} numberOfLines={1}>
+          {coin.nameEn}
+        </Text>
       </View>
       <View style={styles.coinPriceContainer}>
-        <Text style={styles.coinPrice}>
+        <Text style={styles.coinPrice} numberOfLines={1}>
           {Number(coin.currentPrice).toLocaleString()}
         </Text>
       </View>
       <View style={styles.diffContainer}>
         <Text
-          style={[styles.diffRate, { color: isMinus ? "#4692F3" : "#FF5B5B" }]}
+          style={[styles.diffRate, { color: diffTextColor }]}
+          numberOfLines={1}
         >
           {coin.diffRate}
         </Text>
         <Text
-          style={[
-            styles.diffRateSmall,
-            { color: isMinus ? "#4692F3" : "#FF5B5B" },
-          ]}
+          style={[styles.diffRateSmall, { color: diffTextColor }]}
+          numberOfLines={1}
         >
           {Number(coin.diffAmount).toLocaleString()}
         </Text>
       </View>
       <View style={styles.volumeContainer}>
-        <Text style={styles.volumeText}>
+        <Text style={styles.volumeText} numberOfLines={1}>
           {formatToMillion(Number(coin.volume))}
         </Text>
       </View>

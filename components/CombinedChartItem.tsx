@@ -1,19 +1,9 @@
-import React, { memo, useMemo } from "react";
 import { View } from "react-native";
-import { CandleDatum } from "@/type";
+import React, { memo, useMemo } from "react";
+import { CombinedChartItemProps } from "@/type";
 import { formatDateKST } from "@/function/function";
 import Svg, { Line, Rect, Text } from "react-native-svg";
 import { CANDLE_CHART_HEIGHT, VOLUME_CHART_HEIGHT } from "@/const";
-
-export interface CombinedChartItemProps {
-  candle: CandleDatum;
-  index: number;
-  barWidth: number;
-  barSpacing: number;
-  candleYScale: (value: number) => number;
-  volumeYScale: (value: number) => number;
-  volumeMax: number;
-}
 
 const CombinedChartItem: React.FC<CombinedChartItemProps> = memo(
   ({
@@ -25,9 +15,16 @@ const CombinedChartItem: React.FC<CombinedChartItemProps> = memo(
     volumeYScale,
     volumeMax,
   }) => {
+    // 컨테이너 너비 계산
     const containerWidth = useMemo(
       () => barWidth + barSpacing,
       [barWidth, barSpacing]
+    );
+
+    // inline style도 메모이제이션 처리
+    const containerStyle = useMemo(
+      () => ({ width: containerWidth }),
+      [containerWidth]
     );
 
     const { open, close, high, low, volume, x } = candle;
@@ -63,7 +60,7 @@ const CombinedChartItem: React.FC<CombinedChartItemProps> = memo(
     );
 
     return (
-      <View style={{ width: containerWidth }}>
+      <View style={containerStyle}>
         <Svg width={containerWidth} height={CANDLE_CHART_HEIGHT}>
           <Line
             x1={centerX}

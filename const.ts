@@ -1,8 +1,8 @@
 import { Dimensions } from "react-native";
 
-export const HEIGHT = Dimensions.get('screen').height - 300
-export const CANDLE_CHART_HEIGHT = HEIGHT * 0.6
-export const VOLUME_CHART_HEIGHT = HEIGHT * 0.4
+export const HEIGHT = Dimensions.get('screen').height
+export const CANDLE_CHART_HEIGHT = (HEIGHT - 300) * 0.6
+export const VOLUME_CHART_HEIGHT = (HEIGHT - 300) * 0.4
 export const TOTAL_CHART_HEIGHT = CANDLE_CHART_HEIGHT + VOLUME_CHART_HEIGHT;
 
 export const candleGap = 10;

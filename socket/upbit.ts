@@ -2,20 +2,14 @@
 export type SocketCallback = (data: any) => void;
 
 export class UpbitSocketManager {
+  private ticker: Array<string> = [];
   private ws: WebSocket | null = null;
   private subscribers: SocketCallback[] = [];
-  private static instance: UpbitSocketManager;
-  private subscriptionType: "ticker" | "candle" | null = null;
+  private subscriptionType: "ticker" | "candle.1s" | "orderbook" | null = null;
 
-  private constructor() {
+  // 생성자를 public으로 변경하여 인스턴스 생성이 자유로워짐
+  constructor() {
     this.connect();
-  }
-
-  public static getInstance(): UpbitSocketManager {
-    if (!UpbitSocketManager.instance) {
-      UpbitSocketManager.instance = new UpbitSocketManager();
-    }
-    return UpbitSocketManager.instance;
   }
 
   private connect() {
@@ -31,12 +25,15 @@ export class UpbitSocketManager {
 
   private onOpen() {
     console.log("WebSocket 연결 열림");
-    if (this.subscriptionType) {
-      this.sendSubscriptionMessage(this.subscriptionType);
+    if (this.subscriptionType && this.ticker) {
+      this.sendSubscriptionMessage(this.subscriptionType, this.ticker);
     }
   }
 
-  private sendSubscriptionMessage(type: "ticker" | "candle") {
+  private sendSubscriptionMessage(
+    type: "ticker" | "candle.1s" | "orderbook",
+    ticker: Array<string>
+  ) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
     if (type === "ticker") {
@@ -44,46 +41,45 @@ export class UpbitSocketManager {
         { ticket: "UNIQUE_TICKET" },
         {
           type: "ticker",
-          codes: [
-            "KRW-XRP",
-            "KRW-BTC",
-            "KRW-DOGE",
-            "KRW-USDT",
-            "KRW-ETH",
-            "KRW-SOL",
-            "KRW-ONDO",
-            "KRW-ADA",
-            "KRW-QTUM",
-            "KRW-SHIB",
-            "KRW-LINK",
-            "KRW-AQT",
-            "KRW-JUP",
-          ],
+          codes: ticker,
         },
         { format: "DEFAULT" },
       ];
       this.ws.send(JSON.stringify(tickerSubscribeMessage));
       console.log("티커 구독 메시지 전송 완료");
-    } else if (type === "candle") {
+    } else if (type === "candle.1s") {
       const candleSubscribeMessage = [
         { ticket: "UNIQUE_TICKET" },
         {
           type: "candle.1s",
-          codes: [
-            "KRW-BTC",
-          ],
+          codes: ticker,
         },
         { format: "DEFAULT" },
       ];
       this.ws.send(JSON.stringify(candleSubscribeMessage));
       console.log("candle.1s 구독 메시지 전송 완료");
+    } else if (type === "orderbook") {
+      const orderbookSubscribeMessage = [
+        { ticket: "UNIQUE_TICKET" },
+        {
+          type: "orderbook",
+          codes: ticker,
+        },
+        { format: "DEFAULT" },
+      ];
+      this.ws.send(JSON.stringify(orderbookSubscribeMessage));
+      console.log("orderbook 구독 메시지 전송 완료");
     }
   }
 
-  public subscribeType(type: "ticker" | "candle") {
+  public subscribeType(
+    type: "ticker" | "candle.1s" | "orderbook",
+    ticker: Array<string>
+  ) {
+    this.ticker = ticker;
     this.subscriptionType = type;
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.sendSubscriptionMessage(type);
+      this.sendSubscriptionMessage(type, ticker);
     }
   }
 
@@ -99,8 +95,7 @@ export class UpbitSocketManager {
         console.error("Blob 읽기 에러:", err);
       };
       reader.readAsText(event.data);
-    }
-    else if (event.data instanceof ArrayBuffer) {
+    } else if (event.data instanceof ArrayBuffer) {
       message = new TextDecoder("utf-8").decode(event.data);
       this.handleMessage(message);
     } else if (typeof event.data === "string") {
@@ -134,6 +129,7 @@ export class UpbitSocketManager {
   }
 
   public unsubscribe(callback: SocketCallback) {
+    console.log("Socket 종료");
     this.subscribers = this.subscribers.filter((cb) => cb !== callback);
   }
 }
