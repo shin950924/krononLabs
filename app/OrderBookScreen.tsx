@@ -3,50 +3,57 @@ import {
   OrderBookItemProps,
   OrderBookScreenProps,
 } from "@/type";
-import React, { useState, useCallback, memo } from "react";
 import {
-  SafeAreaView,
   View,
   Text,
-  TouchableOpacity,
-  TextInput,
   FlatList,
+  TextInput,
   StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
   ListRenderItemInfo,
+  Pressable,
 } from "react-native";
-
-const OrderBookItem: React.FC<OrderBookItemProps> = memo(
-  ({ askPrice, askVolume, basePrice, isTopHalf }) => {
-    const numericBasePrice = parseFloat(basePrice);
-    const priceDiff = askPrice - numericBasePrice;
-    const percentChange =
-      numericBasePrice !== 0
-        ? ((priceDiff / numericBasePrice) * 100).toFixed(2)
-        : "0.00";
-    return (
-      <View
-        style={[
-          styles.orderBookRow,
-          { backgroundColor: isTopHalf ? "#131b34" : "#201620" },
-        ]}
-      >
-        <View>
-          <Text style={styles.orderBookPrice}>{askPrice.toLocaleString()}</Text>
-          <Text style={styles.orderBookChange}>{percentChange}%</Text>
-        </View>
-        <Text style={styles.orderBookVolume}>
-          {askVolume.toFixed(2).toLocaleString()}
-        </Text>
-      </View>
-    );
-  }
-);
+import React, { useState, useCallback, memo } from "react";
 
 const OrderBookScreen: React.FC<OrderBookScreenProps> = ({
   orderBookData,
   basePrice,
 }) => {
-  const [quantity, setQuantity] = useState<string>("");
+  const [quantity, setQuantity] = useState(0);
+  const [selectedPrice, setSelectedPrice] = useState(0);
+
+  const OrderBookItem: React.FC<OrderBookItemProps> = memo(
+    ({ askPrice, askVolume, basePrice, isTopHalf }) => {
+      const numericBasePrice = parseFloat(basePrice);
+      const priceDiff = askPrice - numericBasePrice;
+      const percentChange =
+        numericBasePrice !== 0
+          ? ((priceDiff / numericBasePrice) * 100).toFixed(2)
+          : "0.00";
+      return (
+        <Pressable
+          style={[
+            styles.orderBookRow,
+            { backgroundColor: isTopHalf ? "#131b34" : "#201620" },
+          ]}
+          onPress={() => {
+            setSelectedPrice(askPrice);
+          }}
+        >
+          <View>
+            <Text style={styles.orderBookPrice}>
+              {askPrice.toLocaleString()}
+            </Text>
+            <Text style={styles.orderBookChange}>{percentChange}%</Text>
+          </View>
+          <Text style={styles.orderBookVolume}>
+            {askVolume.toFixed(2).toLocaleString()}
+          </Text>
+        </Pressable>
+      );
+    }
+  );
 
   const renderItem = useCallback(
     ({ item, index }: ListRenderItemInfo<AskOrderBookData>) => {
@@ -90,10 +97,11 @@ const OrderBookScreen: React.FC<OrderBookScreenProps> = ({
             <TextInput
               style={styles.input}
               keyboardType="numeric"
-              placeholder="0 XRP"
               placeholderTextColor="#999"
-              value={quantity}
-              onChangeText={setQuantity}
+              value={quantity.toString()}
+              onChangeText={(text) => {
+                setQuantity(parseInt(text));
+              }}
             />
           </View>
           <View style={styles.inputRow}>
@@ -101,13 +109,17 @@ const OrderBookScreen: React.FC<OrderBookScreenProps> = ({
             <TextInput
               style={styles.input}
               keyboardType="numeric"
-              value={basePrice}
-              // onChangeText={setBasePrice}
+              value={selectedPrice.toString()}
+              onChangeText={(text) => {
+                setSelectedPrice(parseInt(text));
+              }}
             />
           </View>
           <View style={styles.inputRow}>
             <Text style={styles.label}>총액</Text>
-            <Text style={[styles.valueText, styles.totalText]}>0 KRW</Text>
+            <Text style={[styles.valueText, styles.totalText]}>
+              {quantity * selectedPrice + "  KRW"}
+            </Text>
           </View>
         </View>
         <View style={{ flexDirection: "row", paddingHorizontal: 3 }}>
@@ -171,7 +183,7 @@ const styles = StyleSheet.create({
   },
   label: {
     color: "#ccc",
-    width: 100,
+    width: 50,
   },
   input: {
     flex: 1,

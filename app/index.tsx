@@ -16,7 +16,9 @@ import {
 } from "react-native";
 import CoinRow from "@/components/CoinRow";
 import { CoinData, TickerData } from "@/type";
+import { useQuery } from "@tanstack/react-query";
 import { UpbitSocketManager } from "@/socket/upbit";
+import { fetchMarketList, fetchMarketPrice } from "@/api/api";
 
 const TradingScreen: React.FC = () => {
   const subscriptionSent = useRef(false);
@@ -24,71 +26,61 @@ const TradingScreen: React.FC = () => {
   const [coinData, setCoinData] = useState<CoinData[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [socketData, setSocketData] = useState<TickerData | null>(null);
+  const { data: coinQueryData } = useQuery<CoinData[]>({
+    queryKey: ["coinData"],
+    queryFn: async (): Promise<CoinData[]> => {
+      const marketResponse = await fetchMarketList();
+      const filteredData = marketResponse.filter((item: any) =>
+        item.market.startsWith("KRW-")
+      );
+
+      const marketListStr = filteredData
+        .map((item: any) => item.market)
+        .join(",");
+      let tickerData = await fetchMarketPrice(marketListStr);
+      if (!Array.isArray(tickerData)) {
+        tickerData = [tickerData];
+      }
+
+      const coins: CoinData[] = filteredData.map((item: any) => {
+        const ticker = tickerData.find(
+          (t: TickerData) => t.market === item.market
+        );
+        return {
+          id: item.market,
+          nameKr: item.korean_name,
+          nameEn: item.english_name,
+          currentPrice:
+            ticker && ticker.trade_price !== undefined
+              ? ticker.trade_price.toString()
+              : "0",
+          diffRate:
+            ticker && ticker.signed_change_rate !== undefined
+              ? (ticker.signed_change_rate * 100).toFixed(2) + "%"
+              : "0%",
+          diffAmount:
+            ticker && ticker.signed_change_price !== undefined
+              ? ticker.signed_change_price.toString()
+              : "0",
+          volume:
+            ticker && ticker.acc_trade_price_24h !== undefined
+              ? ticker.acc_trade_price_24h.toString()
+              : "0",
+        };
+      });
+      coins.sort(
+        (a: CoinData, b: CoinData) => Number(b.volume) - Number(a.volume)
+      );
+      return coins;
+    },
+  });
 
   useEffect(() => {
-    const fetchMarketAndTickerData = async () => {
-      try {
-        // 1. 마켓 목록 호출
-        const marketResponse = await fetch(
-          "https://api.upbit.com/v1/market/all?is_details=true"
-        );
-        const marketData = await marketResponse.json();
-
-        const filteredData = marketData.filter((item: any) =>
-          item.market.startsWith("KRW-")
-        );
-
-        const marketListStr = filteredData
-          .map((item: any) => item.market)
-          .join(",");
-        const tickerResponse = await fetch(
-          `https://api.upbit.com/v1/ticker?markets=${marketListStr}`
-        );
-        let tickerData = await tickerResponse.json();
-        if (!Array.isArray(tickerData)) {
-          tickerData = [tickerData];
-        }
-
-        const coins: CoinData[] = filteredData.map((item: any) => {
-          const ticker = tickerData.find(
-            (t: TickerData) => t.market === item.market
-          );
-          return {
-            id: item.market,
-            nameKr: item.korean_name,
-            nameEn: item.english_name,
-            currentPrice:
-              ticker && ticker.trade_price !== undefined
-                ? ticker.trade_price.toString()
-                : "0",
-            diffRate:
-              ticker && ticker.signed_change_rate !== undefined
-                ? (ticker.signed_change_rate * 100).toFixed(2) + "%"
-                : "0%",
-            diffAmount:
-              ticker && ticker.signed_change_price !== undefined
-                ? ticker.signed_change_price.toString()
-                : "0",
-            volume:
-              ticker && ticker.acc_trade_price_24h !== undefined
-                ? ticker.acc_trade_price_24h.toString()
-                : "0",
-          };
-        });
-
-        coins.sort(
-          (a: CoinData, b: CoinData) => Number(b.volume) - Number(a.volume)
-        );
-
-        setCoinList(coins);
-        setCoinData(coins);
-      } catch (error) {
-        console.error("마켓/티커 데이터 로드 에러:", error);
-      }
-    };
-
-    fetchMarketAndTickerData();
-  }, []);
+    if (coinQueryData) {
+      setCoinList(coinQueryData);
+      setCoinData(coinQueryData);
+    }
+  }, [coinQueryData]);
 
   useEffect(() => {
     const socketManager = new UpbitSocketManager();
