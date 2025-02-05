@@ -20,7 +20,7 @@ const CandleStickChart: React.FC<CandleStickChartProps> = ({ candleData }) => {
 
   const barWidth = 40;
   const barSpacing = 0;
-  const horizontalMargin = 13;
+  const horizontalMargin = 0;
 
   const contentWidth = useMemo(() => {
     return (
@@ -63,10 +63,7 @@ const CandleStickChart: React.FC<CandleStickChartProps> = ({ candleData }) => {
 
   const scrollToEnd = useCallback(() => {
     if (flatListRef.current) {
-      flatListRef.current.scrollToOffset({
-        offset: Infinity,
-        animated: true,
-      });
+      flatListRef.current.scrollToEnd();
     }
   }, []);
 
